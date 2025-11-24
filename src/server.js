@@ -58,6 +58,27 @@ app.get("/api/debug/db", async (req, res) => {
   try { await handler(req, res); } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
 });
 
+app.get("/api/debug/connection/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const rows = await db.select().from(serviceConnections).where(eq(serviceConnections.id, id)).limit(1);
+    const r = rows[0];
+    return res.status(200).json({
+      id: r?.id,
+      name: r?.name,
+      status: r?.status,
+      tokenHash: r?.tokenHash,
+      tokenLast4: r?.tokenLast4,
+      secretJson: r?.secretJson,
+      configJson: r?.configJson,
+      createdAt: r?.createdAt,
+      updatedAt: r?.updatedAt,
+    });
+  } catch (e) {
+    res.status(500).json({ error: String(e.message || e) });
+  }
+});
+
 app.get("/api/connections/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
@@ -87,7 +108,7 @@ app.post("/api/connections/:id/rotate-token", async (req, res) => {
     try { if (r.secretJson?.enc) secrets = decryptJson(r.secretJson.enc); } catch (e) {}
     secrets = { ...secrets, token };
     const secretJson = { enc: encryptJson(secrets) };
-    await db.update(serviceConnections).set({ tokenHash, tokenLast4, secretJson }).where(eq(serviceConnections.id, id));
+    await db.update(serviceConnections).set({ tokenHash, tokenLast4, secretJson, status: "active" }).where(eq(serviceConnections.id, id));
     return res.status(200).json({ token, token_last4: tokenLast4 });
   } catch (e) {
     res.status(500).json({ error: String(e.message || e) });
@@ -215,6 +236,17 @@ app.post("/mcp", async (req, res) => {
     const s = getServer();
     await s.connect(transport);
     await transport.handleRequest(req, res, req.body);
+  } catch (e) {
+    res.status(500).json({ error: String(e.message || e) });
+  }
+});
+
+app.get("/mcp", async (req, res) => {
+  try {
+    const hasWpUrl = Boolean(process.env.WP_URL);
+    const hasUsername = Boolean(process.env.WP_USERNAME);
+    const hasPassword = Boolean(process.env.WP_APP_PASSWORD);
+    res.status(200).json({ status: "ok", name: "mcp-wordpress", endpoint: "/mcp", transport: "streamable-http", env: { hasWpUrl, hasUsername, hasPassword } });
   } catch (e) {
     res.status(500).json({ error: String(e.message || e) });
   }

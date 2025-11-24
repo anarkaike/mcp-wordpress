@@ -3,7 +3,6 @@ import { serviceConnections } from "../../../db/schema.js";
 import { eq } from "drizzle-orm";
 import { hashToken, encryptJson, decryptJson } from "../../../src/crypto.js";
 import { customAlphabet } from "nanoid";
-export const config = { runtime: "nodejs" };
 
 export default async function handler(req, res) {
   try {
@@ -22,7 +21,7 @@ export default async function handler(req, res) {
     try { if (r.secretJson?.enc) secrets = decryptJson(r.secretJson.enc); } catch {}
     secrets = { ...secrets, token };
     const secretJson = { enc: encryptJson(secrets) };
-    await db.update(serviceConnections).set({ tokenHash, tokenLast4, secretJson }).where(eq(serviceConnections.id, connId));
+    await db.update(serviceConnections).set({ tokenHash, tokenLast4, secretJson, status: "active" }).where(eq(serviceConnections.id, connId));
     return res.status(200).json({ token, token_last4: tokenLast4 });
   } catch (e) {
     return res.status(500).json({ error: String(e.message || e) });

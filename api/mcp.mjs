@@ -5,7 +5,6 @@ import { serviceConnections, serviceProviders } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { hashToken, decryptJson } from "../src/crypto.js";
 import { createServerForProvider } from "../src/providers/index.js";
-export const config = { runtime: "nodejs" };
 
 export default async function handler(req, res) {
   if (req.method === "GET") {

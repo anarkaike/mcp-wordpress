@@ -2,7 +2,6 @@ import { db } from "../../../src/db.js";
 import { serviceConnections } from "../../../db/schema.js";
 import { eq } from "drizzle-orm";
 import { decryptJson } from "../../../src/crypto.js";
-export const config = { runtime: "nodejs" };
 
 export default async function handler(req, res) {
   try {
