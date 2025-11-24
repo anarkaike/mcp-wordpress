@@ -1,0 +1,1 @@
+- Use o mcp PostgreSQL-mcp-wordpress para analisar a estrutura da base de dados e fazer conferencias

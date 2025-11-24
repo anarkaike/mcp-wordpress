@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Área Logada</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23111'/%3E%3Ctext x='16' y='21' text-anchor='middle' font-size='14' fill='%23fff' font-family='Arial'%3EWP%3C/text%3E%3C/svg%3E" />
+  <style>
+    :root{--bg:#f7f8fa;--text:#151923;--muted:#6b7280;--border:#e5e7eb;--brand:#2e7fff;--brand2:#7f56d9;--green:#16a34a;--card:#ffffff}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:500 16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu}
+    .navbar{height:64px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px}
+    .nav-left{display:flex;align-items:center;gap:20px}
+    .logo{width:32px;height:32px;border-radius:50%;background:#111827;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+    .menu{display:flex;gap:24px}
+    .menu a{color:#374151;text-decoration:none;padding:8px 2px;border-bottom:2px solid transparent}
+    .menu a.active{color:#111827;border-bottom-color:#2e7fff}
+    .nav-right{display:flex;align-items:center;gap:16px}
+    .btn{height:36px;padding:0 12px;border-radius:8px;border:1px solid var(--border);background:#fff;color:#111827;font-weight:600;cursor:pointer}
+    .btn.green{background:#16a34a;color:#fff;border-color:#16a34a}
+    .container{max-width:1100px;margin:24px auto;padding:0 24px}
+    h1{margin:0 0 12px;font-size:22px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 18px rgba(0,0,0,.06);padding:16px}
+    .card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .list{border:1px solid var(--border);border-radius:12px;overflow:hidden}
+    .item{display:flex;justify-content:space-between;align-items:center;padding:14px;border-bottom:1px solid var(--border)}
+    .item:last-child{border-bottom:none}
+    .name{font-weight:800}
+    .muted{color:var(--muted)}
+    .url{font-weight:400}
+    .badge{background:#dcfce7;color:#166534;font-weight:700;font-size:12px;padding:4px 8px;border-radius:999px}
+    .actions{display:flex;gap:8px}
+    .icon-btn{width:36px;height:36px;border:1px solid var(--border);background:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+    .error{color:#ef4444;font-size:13px;margin-top:8px}
+    .token{color:#9ca3af;font-family:ui-monospace, Menlo, Consolas}
+    .tooltip{position:fixed;z-index:50;background:#111827;color:#fff;border-radius:10px;box-shadow:0 8px 18px rgba(0,0,0,.25);padding:10px 12px;transform:translate(0,-50%);min-width:180px;text-align:center;pointer-events:none}
+    .tooltip .t-title{font-weight:800;margin-bottom:4px}
+    .tooltip .t-desc{font-size:12px;opacity:.85}
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:60}
+    .modal{width:100%;max-width:520px;background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 24px 48px rgba(0,0,0,.35);padding:18px}
+    .modal .m-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-weight:800}
+    .modal .m-body{margin-bottom:12px}
+    .modal .m-actions{display:flex;gap:8px;justify-content:flex-end}
+    .modal .field{margin-top:8px}
+  </style>
+</head>
+<body>
+  <div class="navbar">
+    <div class="nav-left">
+      <div class="logo">⚙️</div>
+      <nav class="menu">
+        <a href="#" class="active">Dashboard</a>
+      </nav>
+    </div>
+    <div class="nav-right">
+      <div id="user-name">Carregando…</div>
+      <button class="btn" id="logout">Sair</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <h1>Dashboard</h1>
+    <div class="card">
+      <div class="card-head">
+        <div>Minhas conexões WordPress</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" id="new-toggle">Criar nova</button>
+          <button class="btn" id="refresh">Atualizar</button>
+        </div>
+      </div>
+      <div class="list" id="conn-list"></div>
+      <div class="error" id="conn-err"></div>
+    </div>
+  </div>
+  <script>
+    const iconScript=document.createElement('script');iconScript.src='https://unpkg.com/lucide@latest/dist/umd/lucide.min.js';document.head.appendChild(iconScript);
+    const token = sessionStorage.getItem('token');
+    const user = JSON.parse(sessionStorage.getItem('user')||'null');
+    if(!token){ window.location.href = '/'; }
+    document.getElementById('user-name').innerText = user ? `${user.name}` : 'Usuário';
+
+    async function api(path, method, body){ const res = await fetch(path,{ method, headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token}` }, body: body?JSON.stringify(body):undefined }); const data = await res.json(); if(!res.ok) throw new Error(data.error||'erro'); return data; }
+    function row(x){ const t=x.token||''; const nm=(x.name||'WordPress'); const url=(x.config?.url||''); return `<div class='item' data-id='${x.id}'><div><div class='name'>${nm} &nbsp;&nbsp;<span class='muted url'>${url}</span></div><div class='token'>${t}</div></div><div class='actions'><button class='icon-btn' data-act='copy' data-tip-title='Copiar token' data-tip-desc='Copia o token para uso no n8n'><i data-lucide='copy'></i></button><button class='icon-btn' data-act='rotate' data-tip-title='Rotacionar token' data-tip-desc='Gera um novo token'><i data-lucide='refresh-ccw'></i></button><button class='icon-btn' data-act='revoke' data-tip-title='Revogar token' data-tip-desc='Invalida o token atual'><i data-lucide='ban'></i></button><button class='icon-btn' data-act='test' data-tip-title='Testar conexão' data-tip-desc='Verifica credenciais'><i data-lucide='check-circle'></i></button><button class='icon-btn' data-act='edit' data-tip-title='Editar conexão' data-tip-desc='Alterar nome/URL/credenciais'><i data-lucide='pencil'></i></button><button class='icon-btn' data-act='delete' data-tip-title='Excluir conexão' data-tip-desc='Remove esta conexão'><i data-lucide='trash-2'></i></button></div></div>`; }
+    function renderIcons(){ if(window.lucide&&window.lucide.createIcons) window.lucide.createIcons(); }
+    function openModal(title, bodyHtml, actions){ const ov=document.createElement('div'); ov.className='modal-overlay'; const md=document.createElement('div'); md.className='modal'; md.innerHTML = `<div class='m-head'>${title}<button class='icon-btn' id='m-close'><i data-lucide="x"></i></button></div><div class='m-body'>${bodyHtml}</div><div class='m-actions'></div>`; ov.appendChild(md); document.body.appendChild(ov); renderIcons(); const actBox=md.querySelector('.m-actions'); const btns=(actions||[{label:'Fechar',variant:'secondary'}]); btns.forEach(b=>{ const el=document.createElement('button'); el.className='btn'+(b.variant==='primary'?' green':''); el.textContent=b.label; el.onclick=()=>{ if(b.onClick) b.onClick(); document.body.removeChild(ov); }; actBox.appendChild(el); }); md.querySelector('#m-close').onclick=()=>{ document.body.removeChild(ov); }; return { overlay:ov, modal:md }; }
+    function confirmModal(title, desc, onConfirm){ openModal(title, `<div style='text-align:center'>${desc}</div>`, [{label:'Cancelar',variant:'secondary'},{label:'Confirmar',variant:'primary',onClick:onConfirm}]); }
+    async function refresh(){ try{ const data = await api('/api/connections','GET'); const items = data.items||[]; document.getElementById('conn-list').innerHTML = items.length? items.map(row).join('') : `<div class='item muted'>Nenhuma conexão</div>`; renderIcons(); document.getElementById('conn-err').innerText=''; }catch(e){ document.getElementById('conn-err').innerText=e.message; }}
+    document.getElementById('refresh').onclick = refresh;
+    function connectionForm(mode, initial){ const n=initial?.name||''; const u=initial?.config?.url||''; const s=initial?.secrets?.username||''; const p=initial?.secrets?.app_password||''; const body=`<div class='field'><label>Nome da conexão</label><input id='f-name' value='${n}' style='width:100%;height:36px;border:1px solid var(--border);border-radius:8px;padding:0 10px' /></div><div class='field'><label>URL do WordPress</label><input id='f-url' value='${u}' placeholder='https://seusite.com' style='width:100%;height:36px;border:1px solid var(--border);border-radius:8px;padding:0 10px' /></div><div class='field'><label>Usuário</label><input id='f-user' value='${s}' placeholder='admin' style='width:100%;height:36px;border:1px solid var(--border);border-radius:8px;padding:0 10px' /></div><div class='field'><label>Senha</label><input id='f-pass' value='${p}' placeholder='app password' style='width:100%;height:36px;border:1px solid var(--border);border-radius:8px;padding:0 10px' /></div>`; const title = mode==='create'?'Nova Conexão':'Editar Conexão'; const actions=[{label:'Cancelar',variant:'secondary'},{label: mode==='create'?'Cadastrar':'Atualizar',variant:'primary',onClick: async ()=>{ const name=(document.getElementById('f-name').value||'').trim(); const url=(document.getElementById('f-url').value||'').trim(); const user=(document.getElementById('f-user').value||'').trim(); const pass=document.getElementById('f-pass').value||''; if(mode==='create'){ const r=await api('/api/connections','POST',{provider:'wordpress',name:name||user||'WordPress',config:{url},secrets:{username:user,app_password:pass}}); await refresh(); const mm = openModal('Token gerado', `<div style='text-align:center'><div class='field'><label>Token</label><input value='${r.token||''}' style='width:100%;height:36px;border:1px solid var(--border);border-radius:8px;padding:0 10px' /></div></div>`, [{label:'Copiar',variant:'primary',onClick:async()=>{ await navigator.clipboard.writeText(String(r.token||'')); }}]); mm.modal.querySelector('.m-body input')?.setAttribute('readonly',''); } else { const id=initial.id; await api(`/api/connections/${id}`,'PATCH',{ name, config:{ url }, secrets:{ username:user, app_password:pass } }); await refresh(); } }}]; openModal(title, body, actions); }
+    document.getElementById('new-toggle').onclick = ()=>{ connectionForm('create'); };
+    document.getElementById('conn-list').addEventListener('click', async (e)=>{ const el=e.target.closest('[data-act]'); if(!el) return; const act=el.getAttribute('data-act'); const item=el.closest('.item'); const id=parseInt(item.getAttribute('data-id')); if(act==='copy'){ const d=await api(`/api/connections/${id}`,'GET'); const m = openModal('Copiar token', `<div style='text-align:center'><div class='field'><label>Token</label><input value='${d.token||''}' style='width:100%;height:36px;border:1px solid var(--border);border-radius:8px;padding:0 10px' /></div></div>`, [{label:'Copiar',variant:'primary',onClick:async()=>{ await navigator.clipboard.writeText(String(d.token||'')); }}]); m.modal.querySelector('.m-body input')?.setAttribute('readonly',''); } if(act==='rotate'){ const d=await api(`/api/connections/${id}/rotate-token`,'POST'); await refresh(); const m2 = openModal('Novo token', `<div style='text-align:center'><div class='field'><label>Token</label><input value='${d.token||''}' style='width:100%;height:36px;border:1px solid var(--border);border-radius:8px;padding:0 10px' /></div></div>`, [{label:'Copiar',variant:'primary',onClick:async()=>{ await navigator.clipboard.writeText(String(d.token||'')); }}]); m2.modal.querySelector('.m-body input')?.setAttribute('readonly',''); } if(act==='revoke'){ confirmModal('Revogar token', 'Deseja revogar o token desta conexão?', async()=>{ await api(`/api/connections/${id}/revoke`,'POST'); await refresh(); }); } if(act==='delete'){ confirmModal('Excluir conexão', 'Tem certeza que deseja excluir esta conexão?', async()=>{ await api(`/api/connections/${id}`,'DELETE'); await refresh(); }); } if(act==='test'){ const d=await api(`/api/connections/${id}/test`,'POST'); openModal('Resultado do teste', `<div style='text-align:center'>${d.ok?'Conexão OK':'Falha'}<div class='muted' style='margin-top:6px'>${d.info?.error||d.info?.endpoint||''}</div></div>`); } if(act==='edit'){ const d=await api(`/api/connections/${id}`,'GET'); connectionForm('edit', d); }});
+    const tipEl=document.createElement('div'); tipEl.className='tooltip'; tipEl.style.display='none'; tipEl.innerHTML = `<div class='t-title'></div><div class='t-desc'></div>`; document.body.appendChild(tipEl);
+    function showTip(target){ const t=target.getAttribute('data-tip-title'); const d=target.getAttribute('data-tip-desc'); if(!t&&!d) return; const rect=target.getBoundingClientRect(); tipEl.querySelector('.t-title').innerText=t||''; tipEl.querySelector('.t-desc').innerText=d||''; tipEl.style.left=(rect.right+10)+"px"; tipEl.style.top=(rect.top+rect.height/2)+"px"; tipEl.style.display='block'; }
+    function hideTip(){ tipEl.style.display='none'; }
+    document.addEventListener('mouseover',(e)=>{ const btn=e.target.closest('[data-tip-title]'); if(btn) showTip(btn); });
+    document.addEventListener('mouseout',(e)=>{ const btn=e.target.closest('[data-tip-title]'); if(btn) hideTip(); });
+    document.getElementById('logout').onclick = ()=>{ sessionStorage.removeItem('token'); sessionStorage.removeItem('user'); window.location.href = '/'; };
+    refresh();
+    iconScript.addEventListener('load', renderIcons);
+  </script>
+</body>
+</html>
