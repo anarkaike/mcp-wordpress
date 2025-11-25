@@ -1,5 +1,5 @@
 import { db } from "../../src/db.js";
-import { users } from "../../db/schema.js";
+import { users, auditLogs } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -21,8 +21,12 @@ export default async function handler(req, res) {
     }
     if (!user) return res.status(401).json({ error: "Usuário ou senha inválidos" });
     const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) return res.status(401).json({ error: "Usuário ou senha inválidos" });
+    if (!ok) {
+      try { await db.insert(auditLogs).values({ userId: null, connectionId: null, action: "auth.login_failed", data: { emailOrPhone: String(emailOrPhone) } }); } catch {}
+      return res.status(401).json({ error: "Usuário ou senha inválidos" });
+    }
     const token = jwt.sign({ sub: user.id, name: user.name, email: user.email }, JWT_SECRET, { expiresIn: "12h" });
+    try { await db.insert(auditLogs).values({ userId: user.id, connectionId: null, action: "auth.login", data: { email: user.email } }); } catch {}
     res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email, phone: user.phone } });
   } catch (e) {
     const msg = String(e?.message || e);

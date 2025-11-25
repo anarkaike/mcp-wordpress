@@ -8,7 +8,10 @@
     "start": "node src/server.js",
     "drizzle:generate": "drizzle-kit generate --config=drizzle.config.mjs",
     "drizzle:migrate": "drizzle-kit migrate --config=drizzle.config.mjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:unit": "node tests/handlers.unit.spec.mjs",
+    "test:integration": "NO_LISTEN=1 node tests/integration.express.spec.mjs",
+    "test": "npm run test:unit && npm run test:integration"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",

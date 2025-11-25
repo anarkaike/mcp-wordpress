@@ -1,0 +1,4 @@
+api/connections/[id]/rotate-token.mjs
+api/connections/[id]/test.mjs
+api/connections/[id]/revoke.mjs
+api/connections/[id].mjs

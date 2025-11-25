@@ -1,5 +1,5 @@
 import { db } from "../../src/db.js";
-import { users } from "../../db/schema.js";
+import { users, auditLogs } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { normalizePhone, isEmail } from "../../src/validation.js";
@@ -19,6 +19,7 @@ export default async function handler(req, res) {
     const hash = await bcrypt.hash(password, 10);
     const inserted = await db.insert(users).values({ name, email, phone: phoneNorm, passwordHash: hash }).returning();
     const u = inserted[0];
+    try { await db.insert(auditLogs).values({ userId: u.id, connectionId: null, action: "auth.register", data: { email } }); } catch {}
     res.status(201).json({ id: u.id, name: u.name, email: u.email, phone: u.phone });
   } catch (e) {
     const msg = String(e?.message || e);
