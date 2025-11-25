@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/mcp", "destination": "/api/mcp" },
     { "source": "/app", "destination": "/app.html" },
     { "source": "/", "destination": "/index.html" }
   ]
