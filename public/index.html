@@ -71,7 +71,7 @@
         <form id="register" class="view hidden">
           <div class="field"><label>Nome</label><input id="reg-name" placeholder="Seu nome" /></div>
           <div class="field"><label>Email</label><input id="reg-email" placeholder="email@dominio.com" /></div>
-          <div class="field"><label>Telefone</label><input id="reg-phone" placeholder="+55 11 99999-9999" /></div>
+          <div class="field"><label>Telefone</label><input id="reg-phone" placeholder="+55 11 99999-9999" maxlength="20" inputmode="tel" autocomplete="tel" /></div>
           <div class="field pwd"><label>Senha</label><input id="reg-pass" type="password" placeholder="••••••••" /><button type="button" class="toggle" aria-label="Mostrar/Ocultar" data-target="reg-pass">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 5c-7.633 0-10 7-10 7s2.367 7 10 7 10-7 10-7-2.367-7-10-7Zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10Z"/></svg>
           </button></div>
@@ -110,9 +110,11 @@
     tabs.forEach(t=>t.onclick=()=>{tabs.forEach(x=>x.classList.remove('active'));t.classList.add('active');document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));document.getElementById(t.dataset.tab).classList.remove('hidden')});
     function maskPhone(v){
       let s = String(v).replace(/\D/g,'');
+      if(s.startsWith('0055')) s = s.slice(2);
+      const cc = '+55';
+      // Sempre usar formato com DDI do Brasil
       if(s.startsWith('55')){
         if(s.length>13) s = s.slice(0,13);
-        const cc = '+55';
         const tail = s.slice(2);
         if(tail.length<=2) return `${cc} ${tail}`.trim();
         const area = tail.slice(0,2);
@@ -120,16 +122,13 @@
         if(rest.length<=5) return `${cc} ${area} ${rest}`.trim();
         return `${cc} ${area} ${rest.slice(0,5)}-${rest.slice(5)}`.trim();
       } else {
+        // Número local: prefixa +55 e aplica a mesma lógica progressiva
         if(s.length>11) s = s.slice(0,11);
-        if(s.length<=10){
-          return s.replace(/(\d{0,2})(\d{0,4})(\d{0,4})/, function(_,a,b,c){
-            return (a?`(${a}) `:'') + (b||'') + (c?`-${c}`:'');
-          });
-        } else {
-          return s.replace(/(\d{0,2})(\d{0,5})(\d{0,4})/, function(_,a,b,c){
-            return (a?`(${a}) `:'') + (b||'') + (c?`-${c}`:'');
-          });
-        }
+        if(s.length<=2) return `${cc} ${s}`.trim();
+        const area = s.slice(0,2);
+        const rest = s.slice(2);
+        if(rest.length<=5) return `${cc} ${area} ${rest}`.trim();
+        return `${cc} ${area} ${rest.slice(0,5)}-${rest.slice(5)}`.trim();
       }
     }
     function friendly(msg){
@@ -146,7 +145,12 @@
       };
       return map[m] || m || 'Erro inesperado';
     }
-    document.getElementById('reg-phone').addEventListener('input', e=>{ e.target.value = maskPhone(e.target.value); });
+    const regPhoneEl = document.getElementById('reg-phone');
+    const applyMask = (e)=>{ e.target.value = maskPhone(e.target.value); };
+    regPhoneEl.addEventListener('input', applyMask);
+    regPhoneEl.addEventListener('change', applyMask);
+    regPhoneEl.addEventListener('blur', applyMask);
+    regPhoneEl.addEventListener('paste', (e)=>{ setTimeout(()=>applyMask(e),0); });
     document.getElementById('login-id').addEventListener('input', e=>{
       const val = e.target.value || '';
       if(/^[+\d\s()-]+$/.test(val)){
@@ -160,8 +164,9 @@
     function confirmModal(title, desc, onConfirm){ openModal(title, `<div style='text-align:center'>${desc}</div>`, [{label:'Cancelar',variant:'secondary'},{label:'Confirmar',variant:'primary',onClick:onConfirm}]); }
     function renderIcons(){ if(window.lucide&&window.lucide.createIcons) window.lucide.createIcons(); }
     async function refreshConnections(){ try{ const data = await api('/api/connections','GET'); const list = document.getElementById('conn-list'); list.innerHTML = (data.items||[]).map(itemRow).join('') || '<div class="item">Nenhuma conexão</div>'; renderIcons(); }catch(e){ document.getElementById('conn-err').innerText=e.message; } }
-    async function doRegister(e){ if(e) e.preventDefault(); const name=document.getElementById('reg-name').value.trim(); const email=document.getElementById('reg-email').value.trim(); const phone=document.getElementById('reg-phone').value.trim(); const pass=document.getElementById('reg-pass').value; const pass2=document.getElementById('reg-pass2').value; if(pass2 && pass!==pass2){ document.getElementById('reg-err').innerText='As senhas não coincidem'; return; } try{ await api('/api/auth/register','POST',{name,email,phone,password:pass}); document.querySelector('[data-tab="login"]').click(); document.getElementById('reg-err').innerText=''; }catch(e){ document.getElementById('reg-err').innerText=friendly(e.message); } }
-    async function doLogin(e){ if(e) e.preventDefault(); const id=document.getElementById('login-id').value.trim(); const pass=document.getElementById('login-pass').value; try{ const data = await api('/api/auth/login','POST',{emailOrPhone:id,password:pass}); state.token=data.token; state.user=data.user; sessionStorage.setItem('token', data.token); sessionStorage.setItem('user', JSON.stringify(data.user)); window.location.href = '/app.html'; }catch(e){ document.getElementById('login-err').innerText=friendly(e.message); } }
+    async function doRegister(e){ if(e) e.preventDefault(); const name=document.getElementById('reg-name').value.trim(); const email=document.getElementById('reg-email').value.trim(); const phone=document.getElementById('reg-phone').value.trim(); const pass=document.getElementById('reg-pass').value; const pass2=document.getElementById('reg-pass2').value; if(pass2 && pass!==pass2){ document.getElementById('reg-err').innerText='As senhas não coincidem'; return; } try{ await api('/api/auth/register','POST',{name,email,phone,password:pass}); const data = await api('/api/auth/login','POST',{emailOrPhone:email,password:pass}); state.token=data.token; state.user=data.user; sessionStorage.setItem('token', data.token); sessionStorage.setItem('user', JSON.stringify(data.user)); document.getElementById('reg-err').innerText=''; window.location.href = '/app'; }catch(e){ document.getElementById('reg-err').innerText=friendly(e.message); }
+    }
+    async function doLogin(e){ if(e) e.preventDefault(); const id=document.getElementById('login-id').value.trim(); const pass=document.getElementById('login-pass').value; try{ const data = await api('/api/auth/login','POST',{emailOrPhone:id,password:pass}); state.token=data.token; state.user=data.user; sessionStorage.setItem('token', data.token); sessionStorage.setItem('user', JSON.stringify(data.user)); window.location.href = '/app'; }catch(e){ document.getElementById('login-err').innerText=friendly(e.message); } }
     document.getElementById('login').addEventListener('submit', doLogin);
     document.getElementById('login-btn').onclick = doLogin;
     document.getElementById('register').addEventListener('submit', doRegister);

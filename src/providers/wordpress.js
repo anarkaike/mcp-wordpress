@@ -10,6 +10,16 @@ export default function register(server, cfg, z) {
   const endpoint = url.endsWith("/wp-json") ? url : `${url.replace(/\/$/, "")}/wp-json`;
   const wp = new WPAPI({ endpoint, username, password, auth: Boolean(username && password) });
 
+  async function acfActive() {
+    try {
+      const base = endpoint.replace(/\/$/, "");
+      const res = await fetch(`${base}/acf/v3`);
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
   server.registerTool(
     "wp_request",
     { title: "Requisição genérica", description: "Chama qualquer endpoint do WordPress", inputSchema: { method: z.enum(["GET","POST","PUT","PATCH","DELETE"]), path: z.string(), query: z.record(z.any()).optional(), body: z.record(z.any()).optional() }, outputSchema: { status: z.number().int(), data: z.any() } },
@@ -31,11 +41,37 @@ export default function register(server, cfg, z) {
 
   server.registerTool(
     "wp_list_posts",
-    { title: "Listar posts", description: "Lista posts", inputSchema: { perPage: z.number().int().optional(), page: z.number().int().optional(), search: z.string().optional() }, outputSchema: { items: z.array(z.any()) } },
-    async ({ perPage = 10, page = 1, search }) => {
+    { title: "Listar posts", description: "Lista posts", inputSchema: { perPage: z.number().int().optional(), page: z.number().int().optional(), search: z.string().optional(), includeAcf: z.boolean().optional() }, outputSchema: { items: z.array(z.any()) } },
+    async ({ perPage = 10, page = 1, search, includeAcf }) => {
       let q = wp.posts().perPage(perPage).page(page);
       if (search) q = q.search(search);
       const items = await q.get();
+      let wantAcf = includeAcf;
+      if (typeof wantAcf === "undefined") wantAcf = await acfActive();
+      if (wantAcf) {
+        try {
+          const base = endpoint.replace(/\/$/, "");
+          const u = new URL(`${base}/acf/v3/posts`);
+          u.searchParams.set("per_page", String(perPage));
+          u.searchParams.set("page", String(page));
+          const headers = { "Content-Type": "application/json", "Accept": "application/json" };
+          if (username && password) headers["Authorization"] = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
+          const res = await fetch(u.toString(), { method: "GET", headers });
+          const ct = res.headers.get("content-type") || "";
+          const data = ct.includes("application/json") ? await res.json() : null;
+          if (Array.isArray(data)) {
+            const byId = new Map();
+            for (const it of items) byId.set(it.id, it);
+            for (const a of data) {
+              const pid = a?.id || a?.post?.id || a?.post_id || null;
+              if (pid && byId.has(pid)) {
+                const ref = byId.get(pid);
+                ref.acf = a?.acf || a;
+              }
+            }
+          }
+        } catch {}
+      }
       const output = { items };
       return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
     }
@@ -43,9 +79,22 @@ export default function register(server, cfg, z) {
 
   server.registerTool(
     "wp_get_post",
-    { title: "Obter post", description: "Obtém post pelo ID", inputSchema: { id: z.number().int() }, outputSchema: { item: z.any() } },
-    async ({ id }) => {
+    { title: "Obter post", description: "Obtém post pelo ID", inputSchema: { id: z.number().int(), includeAcf: z.boolean().optional() }, outputSchema: { item: z.any() } },
+    async ({ id, includeAcf }) => {
       const item = await wp.posts().id(id).get();
+      let wantAcf = includeAcf;
+      if (typeof wantAcf === "undefined") wantAcf = await acfActive();
+      if (wantAcf) {
+        try {
+          const base = endpoint.replace(/\/$/, "");
+          const headers = { "Content-Type": "application/json", "Accept": "application/json" };
+          if (username && password) headers["Authorization"] = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
+          const res = await fetch(`${base}/acf/v3/posts/${id}`, { method: "GET", headers });
+          const ct = res.headers.get("content-type") || "";
+          const data = ct.includes("application/json") ? await res.json() : null;
+          if (data) item.acf = data?.acf || data;
+        } catch {}
+      }
       const output = { item };
       return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
     }
@@ -53,12 +102,26 @@ export default function register(server, cfg, z) {
 
   server.registerTool(
     "wp_create_post",
-    { title: "Criar post", description: "Cria post", inputSchema: { title: z.string(), content: z.string(), status: z.string().optional(), categories: z.array(z.number().int()).optional(), tags: z.array(z.number().int()).optional() }, outputSchema: { item: z.any() } },
-    async ({ title, content, status = "draft", categories, tags }) => {
+    { title: "Criar post", description: "Cria post", inputSchema: { title: z.string(), content: z.string(), status: z.string().optional(), categories: z.array(z.number().int()).optional(), tags: z.array(z.number().int()).optional(), acf: z.record(z.any()).optional() }, outputSchema: { item: z.any() } },
+    async ({ title, content, status = "draft", categories, tags, acf }) => {
       const payload = { title, content, status };
       if (categories) payload.categories = categories;
       if (tags) payload.tags = tags;
       const item = await wp.posts().create(payload);
+      if (acf && await acfActive()) {
+        try {
+          const base = endpoint.replace(/\/$/, "");
+          const headers = { "Content-Type": "application/json", "Accept": "application/json" };
+          if (username && password) headers["Authorization"] = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
+          await fetch(`${base}/acf/v3/posts/${item?.id}`, { method: "POST", headers, body: JSON.stringify({ acf }) });
+          try {
+            const res = await fetch(`${base}/acf/v3/posts/${item?.id}`, { method: "GET", headers });
+            const ct = res.headers.get("content-type") || "";
+            const data = ct.includes("application/json") ? await res.json() : null;
+            if (data) item.acf = data?.acf || data;
+          } catch {}
+        } catch {}
+      }
       const output = { item };
       return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
     }

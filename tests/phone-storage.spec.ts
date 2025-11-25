@@ -6,21 +6,28 @@ function uniqueEmail() {
 }
 
 test('Armazena telefone apenas com dígitos', async ({ request }) => {
-  test.skip();
   const email = uniqueEmail();
+  const now = Date.now().toString();
+  const last9 = now.slice(-9); // garante 9 dígitos
+  const digits = `5511${last9}`;
+  const masked = `+55 11 ${last9.slice(0,5)}-${last9.slice(5)}`;
+
   const register = await request.post('/api/auth/register', {
     data: {
       name: 'Digits Only',
       email,
-      phone: '+55 11 97687-1674',
+      phone: masked,
       password: 'SenhaSegura123'
     }
   });
-  expect(register.ok()).toBeTruthy();
+  if(!register.ok()){
+    const err = await register.json();
+    throw new Error(`Registro falhou: ${JSON.stringify(err)}`);
+  }
 
   const login = await request.post('/api/auth/login', {
     data: {
-      emailOrPhone: '5511976871674',
+      emailOrPhone: digits,
       password: 'SenhaSegura123'
     }
   });
@@ -29,5 +36,5 @@ test('Armazena telefone apenas com dígitos', async ({ request }) => {
     throw new Error(`Login falhou: ${JSON.stringify(err)}`);
   }
   const data = await login.json();
-  expect(data.user.phone).toBe('5511976871674');
+  expect(data.user.phone).toBe(digits);
 });
